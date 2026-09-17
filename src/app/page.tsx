@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiClient } from "@/services/apiClient";
 import { Product } from "@/types/product";
@@ -14,93 +14,85 @@ export default function Home() {
   const searchParams = useSearchParams();
   const { setQueryParam, setQueryParams } = useQueryParams();
 
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Read state from URL query parameters
   const searchQuery = searchParams.get("q") || "";
   const selectedCategory = searchParams.get("category") || "";
-  const maxPrice = Number(searchParams.get("maxPrice")) || 2000;
   const sortBy = searchParams.get("sortBy") || "";
   const sortOrder = searchParams.get("sortOrder") || "";
+  const maxPriceINR = Number(searchParams.get("maxPrice")) || 500000;
+  const EXCHANGE_RATE = 83;
 
-  // Fetch all products and categories once on mount
+  // Fetch data from API based on query parameters
   useEffect(() => {
     async function fetchData() {
       try {
         setIsLoading(true);
-        const [productsRes, categoriesRes] = await Promise.all([
-          apiClient.get("/products?limit=50"),
-          apiClient.get("/products/categories"),
-        ]);
+        setErrorMessage(null);
 
-        setAllProducts(productsRes.data.products || productsRes.data);
+        let endpoint = "/products?limit=100";
+        const params = new URLSearchParams();
 
-        const cats = categoriesRes.data.map((c: any) =>
-          typeof c === "string" ? c : c.slug,
-        );
-        setCategories(cats);
+        if (searchQuery) {
+          endpoint = "/products/search";
+          params.append("q", searchQuery);
+        } else if (selectedCategory) {
+          endpoint = `/products/category/${selectedCategory}`;
+        }
+
+        if (sortBy) {
+          params.append("sortBy", sortBy);
+          params.append("order", sortOrder || "asc");
+        }
+
+        const queryString = params.toString();
+        const fullUrl = queryString ? `${endpoint}?${queryString}` : endpoint;
+
+        // Fetch products with independent error catch
+        let fetchedProducts: Product[] = [];
+        try {
+          const productsRes = await apiClient.get(fullUrl);
+          fetchedProducts = productsRes.data.products || productsRes.data;
+        } catch (productErr: any) {
+          console.error("Failed to fetch products:", productErr);
+          setErrorMessage(
+            "Could not load products matching your filter. Please try again.",
+          );
+        }
+
+        // Fetch categories with independent error catch so categories still load if products fail
+        try {
+          const categoriesRes = await apiClient.get("/products/categories");
+          const cats = categoriesRes.data.map((c: any) =>
+            typeof c === "string" ? c : c.slug,
+          );
+          setCategories(cats);
+        } catch (categoryErr) {
+          console.error("Failed to fetch categories:", categoryErr);
+        }
+
+        // Apply price filter on the returned API data
+        if (fetchedProducts.length > 0) {
+          fetchedProducts = fetchedProducts.filter(
+            (p: Product) => p.price * EXCHANGE_RATE <= maxPriceINR,
+          );
+        }
+
+        setProducts(fetchedProducts);
       } catch (err) {
-        console.error("Failed to fetch data", err);
+        console.error("Unexpected error during data fetch", err);
+        setErrorMessage("An unexpected error occurred.");
       } finally {
         setIsLoading(false);
       }
     }
 
     fetchData();
-  }, []);
-
-  // Inside your Home component filter logic:
-  const EXCHANGE_RATE = 83;
-
-  // Read maxPrice from URL, default to 500000 INR if not set
-  const maxPriceINR = Number(searchParams.get("maxPrice")) || 500000;
-
-  // Filter and sort products locally based on current criteria
-  const filteredProducts = useMemo(() => {
-    let result = [...allProducts];
-
-    // Search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (p) =>
-          p.title.toLowerCase().includes(query) ||
-          p.description.toLowerCase().includes(query),
-      );
-    }
-
-    // Category filter
-    if (selectedCategory) {
-      result = result.filter((p) => p.category === selectedCategory);
-    }
-
-    // Price filter (convert API USD price to INR for comparison with slider)
-    result = result.filter((p) => p.price * EXCHANGE_RATE <= maxPriceINR);
-
-    // Sorting
-    if (sortBy) {
-      result.sort((a, b) => {
-        const valA = Number(a[sortBy as keyof Product]) || 0;
-        const valB = Number(b[sortBy as keyof Product]) || 0;
-        if (sortOrder === "asc") {
-          return valA - valB;
-        } else {
-          return valB - valA;
-        }
-      });
-    }
-
-    return result;
-  }, [
-    allProducts,
-    searchQuery,
-    selectedCategory,
-    maxPriceINR,
-    sortBy,
-    sortOrder,
-  ]);
+  }, [searchQuery, selectedCategory, sortBy, sortOrder, maxPriceINR]);
 
   const handleSearchChange = useCallback(
     (query: string) => {
@@ -122,6 +114,7 @@ export default function Home() {
     },
     [setQueryParam],
   );
+
   const handleSortChange = useCallback(
     (newSortBy: string, newSortOrder: string) => {
       setQueryParams({
@@ -133,8 +126,9 @@ export default function Home() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col h-full overflow-hidden">
+      {/* Non-scrolling Top Bar */}
+      <div className="shrink-0 bg-gray-50 py-3 mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-gray-200">
         <ProductSearch
           searchTerm={searchQuery}
           onSearchChange={handleSearchChange}
@@ -146,18 +140,29 @@ export default function Home() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        <aside className="lg:col-span-1">
+      {/* Error Notification Banner */}
+      {errorMessage && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-md">
+          {errorMessage}
+        </div>
+      )}
+
+      {/* Main Grid Content Area */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 flex-1 overflow-hidden">
+        {/* Stationary Filter Sidebar */}
+        <aside className="lg:col-span-1 h-full overflow-y-auto pr-1">
           <ProductFilter
             categories={categories}
             selectedCategory={selectedCategory}
             onCategoryChange={handleCategoryChange}
-            maxPrice={maxPrice}
+            maxPrice={maxPriceINR}
             onPriceChange={handlePriceChange}
           />
         </aside>
-        <div className="lg:col-span-3">
-          <ProductGrid products={filteredProducts} isLoading={isLoading} />
+
+        {/* Independently Scrolling Product Grid */}
+        <div className="lg:col-span-3 h-full overflow-y-auto pr-2 pb-12">
+          <ProductGrid products={products} isLoading={isLoading} />
         </div>
       </div>
     </div>

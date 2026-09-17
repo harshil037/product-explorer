@@ -20,3 +20,8 @@ export interface ProductResponse {
 }
 
 export type Category = string
+
+export interface CartItem {
+  product: Product;
+  quantity: number;
+}

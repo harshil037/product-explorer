@@ -4,6 +4,7 @@ import { formatCurrency } from "@/utils/formatters";
 import { Star, ArrowLeft, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import AddToCartButtonClient from "@/components/products/AddToCartButton";
 
 async function getProduct(id: string): Promise<Product> {
   const response = await apiClient.get(`/products/${id}`);
@@ -91,12 +92,7 @@ export default async function ProductDetailPage({
           </div>
 
           <div className="mt-8 pt-6 border-t border-gray-200 flex space-x-4">
-            <button
-              type="button"
-              className="flex-1 inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <ShoppingBag className="w-5 h-5 mr-2" /> Add to Cart
-            </button>
+            <AddToCartButtonClient product={product} />
           </div>
         </div>
       </div>
