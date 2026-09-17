@@ -16,7 +16,7 @@ function Navbar() {
             href="/"
             className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
           >
-            Catalog
+            ALL Products
           </Link>
         </nav>
         <Link

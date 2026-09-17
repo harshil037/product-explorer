@@ -13,11 +13,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} flex flex-col min-h-screen bg-gray-50 text-gray-900`}>
-        <Navbar /> 
-        <main className="flex-grow">{children}</main>
-        <Footer /> 
+    <html lang="en" className="h-full">
+      <body className={`${inter.className} h-full flex flex-col bg-gray-50 text-gray-900`}>
+        <Navbar />
+        <main className="flex-1 w-full">{children}</main>
+        <Footer />
       </body>
     </html>
   );
